@@ -120,7 +120,7 @@ Route::middleware(['auth', 'customer_admin'])
         Route::delete('tickets/{ticket}/comments/{comment}', [CATicketCommentController::class, 'destroy'])->name('tickets.comments.destroy');
     });
 
-//Ticket Authorization
+//Ticket Authorization testing
 Route::prefix('crd-admin')->middleware('auth:crd_admin')->group(function () {
 
     Route::post('/companies/{company}/assume', [CrdAuthorizationController::class, 'assume'])
