@@ -22,19 +22,15 @@
 /* --- Dashboard layout fixes (paste in your dashboard view CSS) --- */
 
 /* Make the dashboard container use available space and ignore strange margins */
-.container-min {
-  width: 100% !important;       /* allow full width */
-  max-width: 1100px;            /* keep the intended max width on large screens */
-  margin: 22px auto !important; /* center horizontally */
-  padding: 0 16px !important;
-  box-sizing: border-box !important;
+/* FULLSCREEN FIX — keep original design */
+.container-min{
+  width:100%;
+  max-width:none;     /* remove 1100px cap */
+  margin:20px 0;      /* vertical spacing only */
+  padding:0 24px;     /* same visual padding */
+  box-sizing:border-box;
 }
 
-/* If your layout wrapper applies a large left or right margin, reset it here */
-.container-min, .container-min > .grid, .container-min > .header-row {
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-}
 
 /* If some parent adds an offset (like a collapsed sidebar), ensure the dashboard sits normally */
 .main-content, .content-wrapper, .app-content {
@@ -160,8 +156,8 @@ html,body{height:100%} body{margin:0;font-family:Inter,system-ui,-apple-system,"
     </div>
 
     <div class="header-actions" aria-hidden="false">
-      <a href="{{ route('customer-admin.users.create') }}" class="action" aria-label="Create user">+ User</a>
-      <a href="{{ route('customer-admin.contacts.create') }}" class="action" aria-label="Create contact">+ Contact</a>
+      <a href="{{ route('customer-admin.users.create') }}" class="action primary" aria-label="Create user">+ User</a>
+      <a href="{{ route('customer-admin.contacts.create') }}" class="action primary" aria-label="Create contact">+ Contact</a>
       <a href="{{ route('customer-admin.tickets.create') }}" class="action primary" aria-label="Create ticket">+ Ticket</a>
       <!-- theme toggle lives elsewhere -->
     </div>
@@ -306,52 +302,51 @@ html,body{height:100%} body{margin:0;font-family:Inter,system-ui,-apple-system,"
 
 <script>
 (function () {
-  const THEME_KEY = 'crm_theme';
-  const themeToggle = document.getElementById('themeToggle'); // may be on another element
-  const themeIcon = document.getElementById('themeIcon');
 
-  function prefersDark(){ return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
-  function setIcon(isDark){ if (!themeIcon) return; themeIcon.innerHTML = isDark ? '<path stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d=\"M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z\"></path>' : '<path stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z\"></path>'; }
-  function applyTheme(dark){ if (dark) document.documentElement.classList.add('dark'); else document.documentElement.classList.remove('dark'); setIcon(dark); }
-  function loadTheme(){ const s = localStorage.getItem(THEME_KEY); if (s==='dark') return true; if (s==='light') return false; return prefersDark(); }
-  const isDark = loadTheme(); applyTheme(isDark);
-  if (themeToggle) themeToggle.addEventListener('click', ()=>{ const nowDark = document.documentElement.classList.toggle('dark'); localStorage.setItem(THEME_KEY, nowDark ? 'dark' : 'light'); setIcon(nowDark); });
-
-  // Debounce utility
-  function debounce(fn, wait){
-    let t;
-    return function(...args){
-      clearTimeout(t);
-      t = setTimeout(()=>fn.apply(this,args), wait);
+  // Debounce utility (FIXED)
+  function debounce(fn, wait) {
+    let timeout;
+    return function (...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn.apply(this, args), wait);
     };
   }
 
-  // Efficient ticket filtering
+  // Ticket filtering
   const ticketsContainer = document.getElementById('ticketsContainer');
   const searchInput = document.getElementById('searchTickets');
   const statusFilter = document.getElementById('statusFilter');
 
   function filterTickets() {
     if (!ticketsContainer) return;
+
     const q = (searchInput?.value || '').toLowerCase().trim();
     const status = (statusFilter?.value || '').toLowerCase();
     const items = ticketsContainer.querySelectorAll('.ticket');
-    // Use requestAnimationFrame to avoid layout thrashing if many items (should be limited)
+
     window.requestAnimationFrame(() => {
       items.forEach(item => {
         const subject = (item.dataset.subject || '').toLowerCase();
         const contact = (item.dataset.contact || '').toLowerCase();
         const itemStatus = (item.dataset.status || '').toLowerCase();
+
         const matchesQ = !q || subject.includes(q) || contact.includes(q);
         const matchesStatus = !status || itemStatus === status;
+
         item.style.display = (matchesQ && matchesStatus) ? '' : 'none';
       });
     });
   }
 
   const debouncedFilter = debounce(filterTickets, 300);
-  if (searchInput) searchInput.addEventListener('input', debouncedFilter, { passive: true });
-  if (statusFilter) statusFilter.addEventListener('change', filterTickets, { passive: true });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', debouncedFilter, { passive: true });
+  }
+
+  if (statusFilter) {
+    statusFilter.addEventListener('change', filterTickets, { passive: true });
+  }
 
 })();
 </script>
