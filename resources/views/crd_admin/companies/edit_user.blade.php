@@ -71,25 +71,33 @@
         </div>
 
         {{-- ✅ Role Dropdown --}}
-        <div>
-            <label class="block text-gray-700 dark:text-gray-300 font-medium mb-2">
-                Role
-            </label>
+        @php
+        $isClient = $user->hasRole('client', $company->id);
+        $currentRole = $user->roles->first()->role_type ?? 'viewer';
+    @endphp
 
-            @php 
-                $currentRole = $user->roles->first()->role_type ?? 'viewer'; 
-            @endphp
+    <div>
+        <label class="block text-gray-700 dark:text-gray-300 font-medium mb-2">
+            Role
+        </label>
 
+        @if($isClient)
+            <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm rounded-md p-3">
+                This user is a <strong>Client</strong>. Client roles are fixed and cannot be changed.
+            </div>
+        @else
             <select name="role" required
                 class="block w-full rounded-md border border-gray-300 dark:border-gray-700 
-                       bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 
-                       shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-300 
-                       px-3 py-2 text-sm transition">
+                    bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 px-3 py-2">
                 <option value="admin"  {{ $currentRole === 'admin' ? 'selected' : '' }}>Company Admin</option>
                 <option value="agent"  {{ $currentRole === 'agent' ? 'selected' : '' }}>Agent</option>
                 <option value="viewer" {{ $currentRole === 'viewer' ? 'selected' : '' }}>Viewer</option>
+                <option value="customer_admin" {{ $currentRole === 'customer_admin' ? 'selected' : '' }}>Customer Admin</option>
             </select>
-        </div>
+        @endif
+    </div>
+
+
 
         {{-- ✅ Form Buttons --}}
         <div class="flex justify-end items-center gap-4 pt-4">

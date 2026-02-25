@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Hash;
 
 class User extends Authenticatable
 {
@@ -51,7 +50,9 @@ class User extends Authenticatable
      */
     public function primaryRole()
     {
-        return $this->roles()->orderByDesc('is_primary_admin')->first();
+        return $this->roles()
+            ->orderByDesc('is_primary_admin')
+            ->first();
     }
 
     /**
@@ -59,13 +60,10 @@ class User extends Authenticatable
      */
     public function hasRole(string $roleType, ?int $companyId = null): bool
     {
-        $query = $this->roles()->where('role_type', $roleType);
-
-        if (!is_null($companyId)) {
-            $query->where('company_id', $companyId);
-        }
-
-        return $query->exists();
+        return $this->roles()
+            ->where('role_type', $roleType)
+            ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+            ->exists();
     }
 
     /**
@@ -100,4 +98,21 @@ class User extends Authenticatable
         return $this->hasRole('viewer', $this->company_id);
     }
 
+    /**
+     * ✅ NEW: Determine if this user is a Client
+     * (external user under a company)
+     */
+    public function isClient(): bool
+    {
+        return $this->hasRole('client', $this->company_id);
+    }
+
+    /**
+     * ✅ NEW: Generic company ownership check
+     * (useful for authorization & IDOR protection)
+     */
+    public function belongsToCompany(int $companyId): bool
+    {
+        return $this->company_id === $companyId;
+    }
 }

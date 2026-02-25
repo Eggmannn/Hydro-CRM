@@ -18,16 +18,43 @@ class UserAuthController extends Controller
             'email' => 'required|email',
             'password' => 'required',
         ]);
+
         $remember = $request->filled('remember');
+
         if (Auth::guard('web')->attempt($credentials, $remember)) {
             $request->session()->regenerate();
+
+            // Ensure CRD admin is logged out
             Auth::guard('crd_admin')->logout();
+
             $user = Auth::guard('web')->user();
-            if ($user && method_exists($user, 'isCustomerAdmin') && $user->isCustomerAdmin()) {
+
+            // 🔀 ROLE-BASED REDIRECT (ORDER MATTERS)
+
+            // ✅ CLIENT (external user)
+            if ($user->isClient()) {
+                return redirect()->intended(route('client.dashboard'));
+            }
+
+            // ✅ CUSTOMER ADMIN
+            if ($user->isCustomerAdmin()) {
                 return redirect()->intended(route('customer-admin.dashboard'));
             }
+
+            // ✅ ADMIN (CO-ADMIN)
+            if ($user->isCompanyAdmin()) {
+                return redirect()->intended(route('admin.dashboard'));
+            }
+
+            // ✅ AGENT
+            if ($user->isAgent()) {
+                return redirect()->intended(route('agent.dashboard'));
+            }
+
+            // ✅ VIEWER / FALLBACK
             return redirect()->intended(route('dashboard'));
         }
+
         return back()
             ->withErrors(['email' => 'Invalid credentials.'])
             ->withInput($request->only('email', 'remember'));

@@ -12,6 +12,26 @@ use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
+    /* =====================================================
+     | 🔒 Security Helpers
+     * ===================================================== */
+
+    protected function assertUserBelongsToCompany(Company $company, User $user)
+    {
+        if ($user->company_id !== $company->id || $user->deleted) {
+            abort(404); // Prevent IDOR & user enumeration
+        }
+    }
+
+    protected function isClient(User $user, Company $company): bool
+    {
+        return $user->hasRole('client', $company->id);
+    }
+
+    /* =====================================================
+     | Companies
+     * ===================================================== */
+
     public function index()
     {
         $companies = Company::all();
@@ -61,6 +81,10 @@ class CompanyController extends Controller
             ->with('success', 'Company deleted successfully!');
     }
 
+    /* =====================================================
+     | Company Users (HARDENED)
+     * ===================================================== */
+
     public function createUser(Company $company)
     {
         return view('crd_admin.companies.create_user', compact('company'));
@@ -68,11 +92,12 @@ class CompanyController extends Controller
 
     public function storeUser(Request $request, Company $company)
     {
+        // ❌ CRD admin is NOT allowed to create clients
         $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|unique:user,email',
             'password' => 'required|string|min:6|confirmed',
-            'role' => 'required|in:admin,agent,viewer,customer_admin',
+            'role'     => 'required|in:admin,agent,viewer,customer_admin',
         ]);
 
         $user = User::create([
@@ -85,12 +110,12 @@ class CompanyController extends Controller
         ]);
 
         Role::create([
-            'user_id'         => $user->id,
-            'company_id'      => $company->id,
-            'role_type'       => $request->role,
-            'created_by'      => auth('crd_admin')->id(),
-            'is_primary_admin'=> $request->role === 'admin' ? 1 : 0,
-            'created_at'      => now(),
+            'user_id'          => $user->id,
+            'company_id'       => $company->id,
+            'role_type'        => $request->role,
+            'created_by'       => auth('crd_admin')->id(),
+            'is_primary_admin' => $request->role === 'admin' ? 1 : 0,
+            'created_at'       => now(),
         ]);
 
         return redirect()
@@ -102,111 +127,151 @@ class CompanyController extends Controller
     {
         $users = $company->users()
             ->with(['roles' => function ($q) {
-                $q->select('user_id', 'role_type');
+                $q->select('user_id', 'company_id', 'role_type');
             }])
             ->get();
 
         return view('crd_admin.companies.users_index', compact('company', 'users'));
     }
 
-public function editUser(Company $company, User $user)
-{
-    return view('crd_admin.companies.edit_user', compact('company', 'user'));
-}
+    public function editUser(Company $company, User $user)
+    {
+        $this->assertUserBelongsToCompany($company, $user);
 
-public function updateUser(Request $request, Company $company, User $user)
-{
-    $request->validate([
-        'name'     => 'required|string|max:255',
-        'email'    => "required|email|unique:user,email,{$user->id}",
-        'role' => 'required|in:admin,agent,viewer,customer_admin',
-    ]);
+        return view('crd_admin.companies.edit_user', compact('company', 'user'));
+    }
 
-    $user->update([
-        'name'  => $request->name,
-        'email' => $request->email,
-    ]);
+    public function updateUser(Request $request, Company $company, User $user)
+    {
+        $this->assertUserBelongsToCompany($company, $user);
 
-    $role = $user->roles()->first();
-    if ($role) {
-        $role->update([
-            'role_type' => $request->role,
-            'is_primary_admin' => $request->role === 'admin' ? 1 : 0,
+        $isClient = $this->isClient($user, $company);
+
+        // Base validation (profile always editable)
+        $rules = [
+            'name'  => 'required|string|max:255',
+            'email' => "required|email|unique:user,email,{$user->id}",
+        ];
+
+        // ❗ Role change allowed ONLY if NOT client
+        if (!$isClient) {
+            $rules['role'] = 'required|in:admin,agent,viewer,customer_admin';
+        }
+
+        $data = $request->validate($rules);
+
+        // Update profile
+        $user->update([
+            'name'  => $data['name'],
+            'email' => $data['email'],
         ]);
+
+        // 🔒 Client role is PERMANENT (even for CRD admin)
+        if ($isClient) {
+            return redirect()
+                ->route('crd-admin.company-users.index', $company->id)
+                ->with('success', 'User updated. Client role is locked.');
+        }
+
+        // Update role for internal users
+        $role = $user->roles()
+            ->where('company_id', $company->id)
+            ->first();
+
+        if ($role && isset($data['role'])) {
+            $role->update([
+                'role_type'        => $data['role'],
+                'is_primary_admin' => $data['role'] === 'admin' ? 1 : 0,
+            ]);
+        }
+
+        return redirect()
+            ->route('crd-admin.company-users.index', $company->id)
+            ->with('success', "User {$user->name} updated successfully.");
     }
 
-    return redirect()
-        ->route('crd-admin.company-users.index', $company->id)
-        ->with('success', "User {$user->name} updated successfully.");
-}
+    public function deleteUser(Company $company, User $user)
+    {
+        $this->assertUserBelongsToCompany($company, $user);
 
-public function deleteUser(Company $company, User $user)
-{
-    $user->roles()->delete();
-    $user->delete();
+        $user->roles()
+            ->where('company_id', $company->id)
+            ->delete();
 
-    return redirect()
-        ->route('crd-admin.company-users.index', $company->id)
-        ->with('success', "User deleted successfully.");
-}
+        $user->delete();
 
-public function companyTickets(Company $company, Request $request)
-{
-    $query = Ticket::where('company_id', $company->id)
-                    ->with(['contact', 'assignee'])
-                    ->orderBy('created_at', 'desc');
-
-    if ($request->filled('status')) {
-        $query->where('status', $request->status);
+        return redirect()
+            ->route('crd-admin.company-users.index', $company->id)
+            ->with('success', "User deleted successfully.");
     }
 
-    $tickets = $query->paginate(15)->withQueryString();
+    /* =====================================================
+     | Company Tickets
+     * ===================================================== */
 
-    return view('crd_admin.companies.tickets.index', compact('company', 'tickets'));
-}
+    public function companyTickets(Company $company, Request $request)
+    {
+        $query = Ticket::where('company_id', $company->id)
+            ->with(['contact', 'assignee'])
+            ->orderBy('created_at', 'desc');
 
-public function companyTicketShow(Company $company, Ticket $ticket)
-{
-    if ($ticket->company_id !== $company->id) {
-        abort(404);
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $tickets = $query->paginate(15)->withQueryString();
+
+        return view('crd_admin.companies.tickets.index', compact('company', 'tickets'));
     }
 
-    $ticket->load(['contact', 'assignee', 'comments.user']); // load extras if available
+    public function companyTicketShow(Company $company, Ticket $ticket)
+    {
+        if ($ticket->company_id !== $company->id) {
+            abort(404);
+        }
 
-    return view('crd_admin.companies.tickets.show', compact('company', 'ticket'));
-}
+        $ticket->load(['contact', 'assignee', 'comments.user']);
 
-public function companyContacts(Company $company, Request $request)
-{
-    $query = Contact::where('company_id', $company->id)
-                    ->orderBy('name', 'asc');
-
-    if ($request->filled('q')) {
-        $q = $request->q;
-        $query->where(function($w) use ($q) {
-            $w->where('name', 'like', "%{$q}%")
-              ->orWhere('email', 'like', "%{$q}%")
-              ->orWhere('phone', 'like', "%{$q}%");
-        });
+        return view('crd_admin.companies.tickets.show', compact('company', 'ticket'));
     }
 
-    $contacts = $query->paginate(20)->withQueryString();
+    /* =====================================================
+     | Company Contacts
+     * ===================================================== */
 
-    return view('crd_admin.companies.contacts.index', compact('company', 'contacts'));
-}
+    public function companyContacts(Company $company, Request $request)
+    {
+        $query = Contact::where('company_id', $company->id)
+            ->orderBy('name', 'asc');
 
-public function listJson(Request $request)
-{
-    $q = $request->query('q', null);
+        if ($request->filled('q')) {
+            $q = $request->q;
+            $query->where(function ($w) use ($q) {
+                $w->where('name', 'like', "%{$q}%")
+                  ->orWhere('email', 'like', "%{$q}%")
+                  ->orWhere('phone', 'like', "%{$q}%");
+            });
+        }
 
-    $query = Company::select('id', 'name')->orderBy('name', 'asc');
+        $contacts = $query->paginate(20)->withQueryString();
 
-    if ($q) {
-        $query->where('name', 'like', "%{$q}%");
+        return view('crd_admin.companies.contacts.index', compact('company', 'contacts'));
     }
 
-    $companies = $query->get();
+    /* =====================================================
+     | Utilities
+     * ===================================================== */
 
-    return response()->json($companies);
-}
+    public function listJson(Request $request)
+    {
+        $q = $request->query('q', null);
+
+        $query = Company::select('id', 'name')->orderBy('name', 'asc');
+
+        if ($q) {
+            $query->where('name', 'like', "%{$q}%");
+        }
+
+        return response()->json($query->get());
+    }
 }

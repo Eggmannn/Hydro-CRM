@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'customer_admin' => \App\Http\Middleware\EnsureCustomerAdmin::class,
             'ensure.company.assumed' => \App\Http\Middleware\EnsureCompanyAssumed::class,
+            'agent' => \App\Http\Middleware\AgentMiddleware::class,
+            'client' => \App\Http\Middleware\ClientMiddleware::class,
+            'admin' => \App\Http\Middleware\EnsureAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

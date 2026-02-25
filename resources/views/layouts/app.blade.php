@@ -27,10 +27,22 @@
 
     {{-- Role-aware Sidebar: include small partials for each role to keep logic simple --}}
     @if (auth('crd_admin')->check())
-        @include('layouts.partials.sidebar_crd')
-    @elseif (auth()->check())
-        @include('layouts.partials.sidebar_company')
-    @else
+    @include('layouts.partials.sidebar_crd')
+
+@elseif (auth()->check() && auth()->user()->isClient())
+    @include('layouts.partials.sidebar_client')
+
+@elseif (auth()->check() && auth()->user()->isAgent())
+    @include('layouts.partials.sidebar_agent')
+
+@elseif (auth()->check() && auth()->user()->isCompanyAdmin())
+    @include('layouts.partials.sidebar_admin')
+
+@elseif (auth()->check())
+    @include('layouts.partials.sidebar_company')
+
+@else
+
         {{-- Guest sidebar (minimal) --}}
         <aside class="w-64 bg-white dark:bg-gray-800 shadow-lg h-screen fixed top-0 left-0 z-40 transition-all">
             <div class="p-6 border-b dark:border-gray-700 flex items-center justify-center">

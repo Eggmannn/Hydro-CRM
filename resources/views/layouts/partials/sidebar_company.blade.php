@@ -38,6 +38,16 @@
             Contacts
         </a>
     </nav>
+    <div class="pt-4 mt-4 border-t dark:border-gray-700">
+    <div class="text-xs uppercase tracking-wider text-gray-400 px-5 mb-2">
+        Company Tools
+    </div>
+
+    <div class="px-5 text-sm text-gray-500 dark:text-gray-300 leading-relaxed">
+        You can manage your team, clients, tickets, and contacts for your company.
+    </div>
+</div>
+
 </aside>
 
 {{-- ---------- Mobile floating drawer (md:hidden) ---------- --}}
@@ -92,6 +102,16 @@
             Contacts
         </a>
     </nav>
+    <div class="pt-4 mt-4 border-t dark:border-gray-700">
+    <div class="text-xs uppercase tracking-wider text-gray-400 px-5 mb-2">
+        Company Tools
+    </div>
+
+    <div class="px-5 text-sm text-gray-500 dark:text-gray-300 leading-relaxed">
+        You can manage your team, clients, tickets, and contacts for your company.
+    </div>
+</div>
+
 </aside>
 
 {{-- ---------- Mobile drawer JS (namespaced, safe) ---------- --}}

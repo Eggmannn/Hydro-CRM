@@ -15,40 +15,36 @@ class EnsureCompanyAssumed
         if (! $user) {
             return $next($request);
         }
+
         $companyParam = $request->route('company');
-        $companyId = null;
-        if (is_object($companyParam) && isset($companyParam->id)) {
-            $companyId = $companyParam->id;
-        } else {
-            $companyId = $companyParam;
-        }
+        $companyId = is_object($companyParam) ? $companyParam->id : $companyParam;
+
         if (! $companyId) {
             return $next($request);
         }
+
         $assumed = session('assumed_company');
-        if ($assumed && isset($assumed['company_id']) && intval($assumed['company_id']) === intval($companyId)) {
-            if (empty($assumed['expires_at']) || Carbon::parse($assumed['expires_at'])->isFuture()) {
-                return $next($request);
-            }
-            session()->forget('assumed_company');
-        }
-        $auth = CompanyAuthorization::where('crd_admin_id', $user->id)
-            ->where('company_id', $companyId)
-            ->where(function ($q) {
-                $q->whereNull('expires_at')
-                  ->orWhere('expires_at', '>', Carbon::now());
-            })
-            ->latest('granted_at')
-            ->first();
-        if ($auth) {
-            session()->put('assumed_company', [
-                'company_id' => $companyId,
-                'authorization_id' => $auth->id,
-                'expires_at' => optional($auth->expires_at)->toDateTimeString(),
-            ]);
+
+        // ✅ Already assumed for THIS company and still valid
+        if (
+            $assumed &&
+            intval($assumed['company_id']) === intval($companyId) &&
+            (
+                empty($assumed['expires_at']) ||
+                Carbon::parse($assumed['expires_at'])->isFuture()
+            )
+        ) {
             return $next($request);
         }
-        return redirect()->route('crd-admin.authorization.prompt', ['company' => $companyId])
-                         ->with('info', 'You must explicitly assume authorization for this company to view its tickets.');
+
+        // ❗ Store intended URL BEFORE redirecting
+        session()->put('assume_intended_url', $request->fullUrl());
+
+        // ❗ Clear stale assumption
+        session()->forget('assumed_company');
+
+        return redirect()
+            ->route('crd-admin.authorization.prompt', ['company' => $companyId])
+            ->with('info', 'You must assume authorization to access this company.');
     }
 }

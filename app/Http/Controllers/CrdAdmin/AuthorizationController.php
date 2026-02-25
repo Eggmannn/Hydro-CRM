@@ -19,16 +19,15 @@ class AuthorizationController extends Controller
     public function assume(Request $request, Company $company)
     {
         $user = Auth::user();
-
         $expires = Carbon::now()->addHours(8);
 
         $auth = CompanyAuthorization::create([
             'crd_admin_id' => $user->id,
             'company_id'   => $company->id,
             'granted_by'   => $user->id,
-            'granted_at'   => Carbon::now(),
+            'granted_at'   => now(),
             'expires_at'   => $expires,
-            'reason'       => $request->input('reason', null),
+            'reason'       => $request->input('reason'),
         ]);
 
         session()->put('assumed_company', [
@@ -37,17 +36,30 @@ class AuthorizationController extends Controller
             'expires_at'       => $expires->toDateTimeString(),
         ]);
 
-        return redirect()->route('crd-admin.companies.tickets.index', ['company' => $company->id])
-                         ->with('success', 'Assumed authorization for ' . $company->name);
+        // ✅ Redirect back to where user originally wanted to go
+        $intended = session()->pull('assume_intended_url');
+
+        if ($intended) {
+            return redirect($intended)
+                ->with('success', 'Authorization assumed for ' . $company->name);
+        }
+
+        // Fallback (safe default)
+        return redirect()
+            ->route('crd-admin.companies.tickets.index', ['company' => $company->id])
+            ->with('success', 'Authorization assumed for ' . $company->name);
     }
 
     public function release(Request $request)
     {
-        $session = session()->get('assumed_company');
+        $session = session('assumed_company');
+
         if ($session && isset($session['authorization_id'])) {
-            CompanyAuthorization::where('id', $session['authorization_id'])->update(['expires_at' => Carbon::now()]);
+            CompanyAuthorization::where('id', $session['authorization_id'])
+                ->update(['expires_at' => Carbon::now()]);
         }
-        session()->forget('assumed_company');
+
+        session()->forget(['assumed_company', 'assume_intended_url']);
 
         return back()->with('success', 'Authorization released.');
     }
